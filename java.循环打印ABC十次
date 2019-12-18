@@ -1,0 +1,137 @@
+//第一种写法：
+
+package lesson3;
+
+public class SequencePrint2 {
+    /**
+     * 三个线程 A、B、C 分别打印字符串 A、B、C
+     * 要求：循环打印10次
+     * 打印结果为：
+     * ABC
+     * ABC
+     * ABC
+     * ...
+     * 总共打印10次
+     */
+    private volatile static String[] INFOS = {"A", "B", "C"};
+    private volatile static int INDEX;
+    public static void main(String[] args) {
+        // 第二种写法：
+        new Thread(new Task("A")).start();
+        new Thread(new Task("B")).start();
+        new Thread(new Task("C")).start();
+
+    }
+
+    static class Task implements Runnable {
+        private String name;
+
+        public Task(String name) {
+            this.name = name;
+        }
+
+        @Override
+        public void run() {
+            try {
+                for (int i = 0; i < 10; i++) {
+                    synchronized (SequencePrint.class) {
+                        while (!name.equals(INFOS[INDEX])) {
+                            SequencePrint.class.wait();
+                        }
+                        System.out.print(name);
+                        if (INDEX == INFOS.length - 1) {
+                            System.out.println();
+                        }
+                        INDEX = (INDEX + 1) % INFOS.length;
+                        SequencePrint.class.notifyAll();
+                    }
+                }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+}
+
+// 第二种写法：
+
+public class SequencePrint {
+    /**
+     * 三个线程 A、B、C 分别打印字符串 A、B、C
+     * 要求：循环打印10次
+     * 打印结果为：
+     * ABC
+     * ABC
+     * ABC
+     * ...
+     * 总共打印10次
+     */
+    private volatile static String INDEX = "A";
+    public static void main(String[] args) {
+        // 第一种写法：
+        Thread a = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    for (int i = 0; i < 10; i++) {
+                        synchronized (SequencePrint.class) {
+                            while (!INDEX.equals("A")) {
+                                SequencePrint.class.wait();
+                            }
+                            System.out.print(INDEX);
+                            INDEX = "B";
+                            SequencePrint.class.notifyAll();
+                        }
+                    }
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+
+        Thread b = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    for (int i = 0; i < 10; i++) {
+                        synchronized (SequencePrint.class) {
+                            while (!INDEX.equals("B")) {
+                                SequencePrint.class.wait();
+                            }
+                            System.out.print(INDEX);
+                            INDEX = "C";
+                            SequencePrint.class.notifyAll();
+                        }
+                    }
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+
+        Thread c = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    for (int i = 0; i < 10; i++) {
+                        synchronized (SequencePrint.class) {
+                            while (!INDEX.equals("C")) {
+                                SequencePrint.class.wait();
+                            }
+                            System.out.print(INDEX);
+                            System.out.println();
+                            INDEX = "A";
+                            SequencePrint.class.notifyAll();
+                        }
+                    }
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+
+        a.start();
+        b.start();
+        c.start();
+    }
+}
