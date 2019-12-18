@@ -1,0 +1,43 @@
+class Foo {
+    // 通过增加一个全局标志位来完成操作
+    private volatile int NUM = 0;
+    public Foo() {
+        
+    }
+
+    public void first(Runnable printFirst) throws InterruptedException {
+        synchronized(Foo.class) {
+            while (NUM != 0) {
+                Foo.class.wait();
+            }
+            printFirst.run();
+            NUM++;
+            Foo.class.notifyAll();        
+        }
+        // printFirst.run() outputs "first". Do not change or remove this line.
+    }
+
+    public void second(Runnable printSecond) throws InterruptedException {
+        synchronized(Foo.class) {
+            while (NUM != 1) {
+                Foo.class.wait();
+            }
+            printSecond.run();
+            NUM++;
+            Foo.class.notifyAll();
+        }
+        // printSecond.run() outputs "second". Do not change or remove this line.
+    }
+
+    public void third(Runnable printThird) throws InterruptedException {
+        synchronized(Foo.class) {
+            while (NUM != 2) {
+                Foo.class.wait();
+            }
+            printThird.run();
+            NUM++;
+            Foo.class.notifyAll();
+        }
+        // printThird.run() outputs "third". Do not change or remove this line.
+    }
+}
