@@ -1,0 +1,95 @@
+// 官方版本：
+package lesson07;
+
+import java.beans.ExceptionListener;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+public class ExecutorsTest {
+
+    // 第一种：单个线程的线程池
+    // private static final ExecutorService EXE = Executors.newSingleThreadExecutor();
+
+    // 第二种：固定数量大小的线程的线程池
+     private static final ExecutorService EXE =
+          Executors.newFixedThreadPool(5);
+
+    // 第三种：可以缓存的线程池
+    // 初始化可以没有线程再运行，随着任务的增加，线程也再增加，并且这些线程运行完没有直接关闭
+    // 前面创建的线程池可以重复使用，如果后面任务增多，继续创建新的线程
+    // private static final ExecutorService EXE = Executors.newCachedThreadPool();
+
+    // 第四种：
+    //  private static final ExecutorService EXE = Executors.newScheduledThreadPool();
+    public static void main(String[] args) {
+        for (int i = 0; i < 100; i++) {
+            final int j = i;
+            EXE.submit(new Runnable() {
+                @Override
+                public void run() {
+                    while (true) {
+                        System.out.println(j);
+                        try {
+                            Thread.sleep(3000);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }
+            });
+        }
+        EXE.shutdown();
+    }
+}
+
+// 模拟实现单个或者固定数量线程的线程池
+
+package lesson07;
+
+public class MyThreadPool {
+
+    // 前面模拟的阻塞队列
+    private MyBlockingQueue<Runnable> queue;
+    // 模拟工作的线程
+    private MyWorker[] workers;
+
+    public MyThreadPool(int capacity, int size) {
+        workers = new MyWorker[capacity];
+        queue = new MyBlockingQueue<>(size);
+        for (int i = 0; i < capacity; i++) {
+            workers[i] = new MyWorker(queue);
+            workers[i].start();
+        }
+    }
+
+    // 任务方法，让线程执行这些任务
+    public void execute(Runnable task) {
+        // 向阻塞队列里面添加任务，即使线程满了，也可以添加任务，这时候任务会等待阻塞
+        // 这里直接向阻塞队列里添加任务，再多线程下不会发生线程不安全的问题
+        // 因为再阻塞队列里面的 offer 操作已经进行了锁定
+        queue.offer(task);
+    }
+}
+
+// MyWorker 模拟的是单个或者固定数量的线程
+class MyWorker extends Thread {
+
+    // 此时将阻塞队列传入进来，我们才能完成阻塞队列里面具体的任务
+    private MyBlockingQueue<Runnable> queue;
+
+    public MyWorker(MyBlockingQueue queue) {
+        this.queue = queue;
+    }
+    @Override
+    public void run() {
+        while (true) {
+            // 取出实际要工作的任务
+            Runnable task = queue.poll();
+            // run() 和 start() 不同，run() 会等待里面执行完毕再进行
+            // 而 start()不会，它启动之后就会接着往下执行
+            // 这里使用 run()，是因为此时线程再不断的完成任务，当任务都完成时
+            // 线程会等待，等待新的任务进来
+            task.run();
+        }
+    }
+}
