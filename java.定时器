@@ -1,0 +1,186 @@
+// 第一种版本：简单容易实现但是效率低，不太适合多线程
+
+package lesson07;
+
+public class MyTimer {
+
+    public static void main(String[] args) {
+        new MyTimer().schedule(new Runnable() {
+            @Override
+            public void run() {
+                System.out.println("哈哈");
+            }
+        }, 10000,2000);
+    }
+    public void schedule(Runnable task,
+                            long delay, long period) {
+        try {
+            long next = System.currentTimeMillis() + delay;
+            while (true) {
+                long current = System.currentTimeMillis();
+                if (next > current) {
+                    Thread.sleep(next - current);
+                }
+                new Thread(task).start();
+                if (period > 0) {
+                    next += period;
+                } else {
+                    break;
+                }
+            }
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+
+// 第二种版本：效率高，适合多线程
+
+import java.util.concurrent.PriorityBlockingQueue;
+
+// 模拟其他线程需要调用我们封装好的 Mytimer2
+public class TimerTest2 {
+    public static void main(String[] args) {
+        Mytimer2 timer2 = new Mytimer2();
+        // 一个定时任务
+        timer2.schedule(new Runnable() {
+            @Override
+            public void run() {
+                System.out.println("哈哈");
+            }
+        }, 2000, 1000);
+
+        // 第二个定时任务
+//        timer2.schedule(new Runnable() {
+//            @Override
+//            public void run() {
+//                System.out.println("世界");
+//            }
+//        }, 0, 1000);
+    }
+}
+
+// 基于阻塞队列模拟实现效率高的定时器
+class Mytimer2 {
+
+    // 优先级别阻塞式队列
+    // 加上 static 是为了可以让其他地方重复使用 queue
+    // 加上 final 是为了防止其他地方使用时修改 queue
+    // 这样阻塞队列就是统一封装的,其他所有调用的地方的往 queue 里面存储任务
+    // 而且任务都是使用同一个队列 queue,这样效率更高
+    // 因为不会随着不同地方的调用创建新的队列
+    private static final PriorityBlockingQueue<Timer2Task> QUEUE
+             = new PriorityBlockingQueue<>();
+
+    public Mytimer2() {
+        // 暂时设置启动一个线程来完成这个任务
+        // 构造方法处理 queue 的数据，执行它的任务
+
+        // 如果没有创建一个线程来完成任务，而是直接使用 while (true) {}
+        // 就会造成初始化阻塞的状态，因为刚开始创建 Mytimer2 时，队列为空
+        // 这样就会一直困在阻塞式队列里面出不来
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    while (true) {
+                        // 出队列：poll() 和 take() 的区别
+                        // poll()是非阻塞式队列，take()是阻塞式队列
+                        // 需要使用阻塞式 take(),如果当前队列 QUEUE 为空
+                        // 就会阻塞
+                        Timer2Task task = QUEUE.take();
+                        long current = System.currentTimeMillis();
+                        if (task.getNext() > current) {
+                            // 等待: wait or sleep
+                            // 要用wait()，因为其他地方可能是多线程再使用这个定时器
+                            // 例如一个任务间隔10秒打印，而另一个地方的任务又添加进来一个task
+                            // 此时需要对这里等待操作进行唤醒
+                            // 重新将前面取出的 task 加回 QUEUE 中，再返回 while 判断
+                            QUEUE.offer(task);
+                            synchronized (QUEUE) {
+                                // 等待一段时间就该接着往下运行，否则不能按要求打印出任务
+                                QUEUE.wait(task.getNext() - current);
+                            }
+                        } else {
+                            // 添加 else 是因为
+                            // 假设一个任务等待1分钟才能打印，如果在等待的时候
+                            // 其他地方也往 queue 里添加任务，这时wait()就会被唤醒
+                            // 如果这里没有 else 那么就会执行下面的操作，就会没有按照要求打印
+                            // 所以需要 else ，让 task 重新返回 while 进行时间判断
+                            // 执行任务
+                            task.getTask().run();
+                            if (task.getPeriod() > 0) {
+                                // 还要循环执行下一次任务
+                                // 修改下一次执行时间 next
+                                task.setNext(task.getNext() + task.getPeriod());
+                                // 和上面同样，这里也需要重新添加取出的 task
+                                QUEUE.offer(task);
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+    }
+
+    // schedule 是往队列里面存的操作
+    public void schedule(Runnable task, long delay, long period) {
+        QUEUE.offer(new Timer2Task(task, delay, period));
+        // 因为可能存在多个地方对这个定时器进行调用
+        // 不同地方往同一个 queue 里添加任务时，就需要上锁
+        synchronized (QUEUE) {
+            QUEUE.notifyAll();
+        }
+    }
+}
+
+// 自己的工作任务：
+// 往优先级队列 queue 里面保存
+// 这里 Comparable 比较的对象是它自身
+// 因为是和同队列里面的其他对象进行比较
+class Timer2Task implements Comparable<Timer2Task>{
+    // 用属性来进行保存
+    private Runnable task;
+    private long next;
+    private long period;
+    // 这里的 task，next，period 需要获取方法
+    // 获取next因为需要根据下一次执行时间和当前时间判断谁大谁小，是否需要执行
+    // 还要设置下一个执行时间，所以还需要 next 的设置方法
+    public void setNext(long next) {
+        this.next = next;
+    }
+
+    public Runnable getTask() {
+
+        return task;
+    }
+
+    public long getNext() {
+        return next;
+    }
+
+    public long getPeriod() {
+        return period;
+    }
+
+    public Timer2Task(Runnable task, long delay, long period) {
+        this.task = task;
+        // 下次执行的时间
+        this.next = System.currentTimeMillis() + delay;
+        this.period = period;
+    }
+
+    // 需要根据下一次执行时间来确定，下一次执行时间是根据 delay 和 period
+    // 所以我们要怎么样来组和 delay 和 period
+    @Override
+
+    public int compareTo(Timer2Task o) {
+        // 谁更小，就 return 谁
+        return Long.compare(next, o.next);
+    }
+}
