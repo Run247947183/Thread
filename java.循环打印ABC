@@ -1,0 +1,56 @@
+package lesson2;
+
+public class SequencePrint {
+
+    // 数组是 java 对象，是放在堆里面的
+    // 定义需要打印的顺序
+    private static String[] INFOS = {"A", "B", "C"};
+
+    // 当前执行到循环数组的索引
+    private static int INDEX;
+
+    public static void main(String[] args) {
+        for (int i = 0; i < INFOS.length; i++) {
+            // 相当于一共创建三个线程
+            // 一个线程打印 A 十次，一个线程打印 B 十次，一个线程打印 C 十次
+            // 至于这三十个打印之间的顺序，由静态打印内部类来决定
+            new Thread(new PrintTask(i)).start();
+        }
+    }
+    // 定义一个静态内部类
+    private static class PrintTask implements Runnable {
+
+        // 当前线程需要执行的索引位置
+        // 相当于一共由三个线程，但是一个线程只有一个 index
+        // index = 0 表示打印 A，index = 1 表示打印 B, index = 2 表示打印 C
+        private Integer index;
+
+        public PrintTask(Integer integer) {
+            this.index = integer;
+        }
+
+        @Override
+        public void run() {
+            try {
+                for (int k = 0; k < 10; k++) {
+                    synchronized (INFOS) {
+                        // 如果需要打印的索引不等于当前线程的索引，就等待
+                        while (INDEX != index) {
+                            INFOS.wait();
+                        }
+                        System.out.print(INFOS[index]);
+                        if (index == INFOS.length - 1) {
+                            System.out.println();
+                        }
+                        // 循环队列的索引变化操作
+                        INDEX = (INDEX + 1) % INFOS.length;
+                        INFOS.notifyAll();
+                    }
+                }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+}
+
